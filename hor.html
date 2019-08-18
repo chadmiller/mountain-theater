@@ -5,140 +5,121 @@
 		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 		<title>horizon</title>
 		<style>
-			html { margin: 0; padding: 0; }
-			body { background: #034; margin: 0; }
+			html, body, canvas { margin: 0; padding: 0; border: 0; overflow: hidden; }
+			body { background: #034; }
 			canvas { width: 100vw; height: 100vh; }
 		</style>
 	</head>
 	<body>
-		<script src="https://cdn.jsdelivr.net/npm/webvr-polyfill@latest/build/webvr-polyfill.js"></script>
+		<script src="js/webvr-polyfill.js"></script>
 		<script src="js/three.js"></script>
+		<script src="js/TerrainLoader.js"></script>
+		<script src="js/OrbitControls.js"></script>
 		<script>
 
 			// setup
 			var webvrPolyfill = new WebVRPolyfill();
 
 			// user data
+			var sea_color = 0x003344;
+			var rock_color = 0x6F7953;
+			var sky_color = 0x1c6ba0;
+
 			var here_lat = 47.677756; // degrees
 			var here_lng = -122.338935; // degrees
-			var here_alt_above_ground = 2; // meters
-			var sky_color = 0x003344;
+			var here_alt_above_ground = 0; // meters
 			var meters_per_degree = 111111;
 			var meters_per_degree_x = meters_per_degree;
 			var meters_per_degree_z = Math.cos(here_lat) * meters_per_degree;
 
-			var CUTOFF_DISTANCE = 200000; // meters
+			var CUTOFF_DISTANCE = 1400; // meters
 
 			var scene = new THREE.Scene();
-			var camera = new THREE.PerspectiveCamera(30, window.innerWidth / window.innerHeight, 2, CUTOFF_DISTANCE);
 
 			var here_x = here_lng * meters_per_degree_x;
 			var here_z = here_lat * meters_per_degree_z;
 
-			camera.position.y = here_alt_above_ground;
-//			camera.position.x = here_x;
-//			camera.position.z = here_z;
-
-			console.log(camera.position);
-
 			scene.background = new THREE.Color(sky_color);
+			scene.fog = new THREE.Fog(0xaaaabb, 0.1, CUTOFF_DISTANCE);
 
 			var renderer = new THREE.WebGLRenderer();
 			renderer.setSize(window.innerWidth, window.innerHeight);
 			document.body.appendChild(renderer.domElement);
 
-			/*
-			var cube = new THREE.Mesh(new THREE.BoxGeometry(150, 200, 100), new THREE.MeshLambertMaterial({ color: 0xffffff }));
-			scene.add(cube);
-
-			cube.position.z = -300;
-			cube.position.y = here_alt;
-			*/
-
-			var sunlight = new THREE.DirectionalLight(0xffffee, 0.8);
-			sunlight.position = new THREE.Vector3(1, 1, 1).normalize();
+			var sunlight = new THREE.DirectionalLight(0xfae25f, 0.7);
+			sunlight.position = new THREE.Vector3(0.5, 1, 5).normalize();
 			scene.add(sunlight);
 
-			scene.add(new THREE.AmbientLight(0x99bbff, 0.3));
+			scene.add(new THREE.AmbientLight(sky_color, 0.8));
 
-
-			/*
-			var distance = 300;
-			for (var deg = 0.0; deg < (2*Math.PI); deg += (Math.PI/100)) {
-				var x = distance * Math.cos(deg);
-				var y = distance * Math.sin(deg);
-				elevation.vertices.push(new THREE.Vector3(x, 0, y));
-				elevation.vertices.push(new THREE.Vector3(x, 10, y));
-			}
-
-			for (var i = 0; i < elevation.vertices.length; i++) {
-				elevation.faces.push(new THREE.Face3(i, (i+2)%elevation.vertices.length, (i+1)%elevation.vertices.length));
-			}
-
-			*/
-			/*
-			var size = 1000;
-			for (var x = -size; x < size; x++) {
-				for (var y = -size; y < size; y++) {
-					elevation.vertices.push(new THREE.Vector3(x, y, Math.random()*50));
-				}
-			}
-
-			for (var x = -size; x < size-1; x += 50) {
-				for (var y = -size; y < size-1; y += 50) {
-					var i = (x+size)+((y+size)*2*size);
-					elevation.faces.push(new THREE.Face3(i+1, i, i+20000));
-				}
-			}
-			*/
-
-
-			var mat = new THREE.MeshBasicMaterial({ color: 0x1c6ba0, side: THREE.DoubleSide });
+			var mat = new THREE.MeshBasicMaterial({ color: sea_color, side: THREE.DoubleSide });
 			var seaLevel = new THREE.Mesh(new THREE.PlaneBufferGeometry(2000, 2000, 8, 8), mat);
 			seaLevel.rotateX( - Math.PI / 2);
-			seaLevel.position.x = here_x;
-			seaLevel.position.z = here_z;
 			scene.add(seaLevel);
 
+			//var tile_name = "geodata/terrain47-50,121-126.envi";
+			//var tile_name = "geodata/terrain47-49,121-122.envi";
+			//var tile_name = "geodata/terrain47-49,121-123.envi";
+			//var tile_name = "geodata/terrain46,121.envi";
+			var tile_name = "geodata/terrain47-49,121-126.envi";
+			var height_coefficient = 50;
 
-			var elevation = new THREE.Geometry();
-			var rock = new THREE.MeshBasicMaterial({ color: 0x888800 });
-			var terrain = new THREE.Mesh(elevation, rock);
+			var material = new THREE.MeshPhongMaterial({ color: rock_color, shininess: 0.20, specular: 0xffffff, wireframe: false });
 
-			scene.add(terrain);
+			var info_xhr = new XMLHttpRequest();
+			var terrainLoader = new THREE.TerrainLoader();
+			terrainLoader.load(tile_name, function(data) {
+				console.log("Got " + data.length + " uint16s of data.");
 
+				info_xhr.open("GET", tile_name+".aux.xml", true);
+				info_xhr.onload = function (e) {
+					console.log("Got the auxxml");
+					if (info_xhr.readyState === 4) {
+						var lines = info_xhr.responseXML.querySelectorAll('MDI[key=lines]')[0].textContent-1;
+						var samples = info_xhr.responseXML.querySelectorAll('MDI[key=samples]')[0].textContent-1;
+
+						//var geometry = new THREE.PlaneGeometry(lines*10, samples*10, lines, samples);
+						var geometry = new THREE.PlaneGeometry(samples*10, lines*10, samples, lines);
+						for (var i = 0, l = geometry.vertices.length; i < l; i++) {
+							  //geometry.vertices[i].z = data[i] / 65535 * height_coefficient;
+							  geometry.vertices[i].z = data[i] * height_coefficient / 65535;
+						}
+
+						var plane = new THREE.Mesh(geometry, material);
+						plane.rotateX( - Math.PI / 2);
+						plane.translateZ(-0.3); // submerge the sea level
+						scene.add(plane);
+						
+					}
+				};
+				info_xhr.send(false);
+
+
+			});
+
+
+			var camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 2, CUTOFF_DISTANCE);
+			camera.position.y = here_alt_above_ground;
+			camera.position.x = here_x;
+			camera.position.z = here_z;
+
+			var controls = new THREE.OrbitControls(camera);
+
+			//controls.update() must be called after any manual changes to the camera's transform
+			camera.position.set(0, 20, 100);
+			//controls.enableDamping = true;
+			controls.enableKeys = true;
+			//controls.maxPolarAngle = 0;
+			controls.rotateSpeed = 1;
+			controls.update();
 
 			function animate() {
 				requestAnimationFrame(animate);
-
-				//cube.rotation.x += 0.01;
-				//cube.rotation.y += 0.001;
-
-				camera.rotation.y += 0.0005;
-
+				// required if controls.enableDamping or controls.autoRotate are set to true
+				//controls.update();
 				renderer.render(scene, camera);
 			}
-			renderer.render(scene, camera);
 			animate();
-
-
-			function load_tile_data(int_array) {
-				console.log("Got " + int_array.length + " bytes of data");
-			}
-
-
-			var tile_name = "geodata/grand.vrt";
-			var xhr = new XMLHttpRequest();
-			xhr.responseType = 'arraybuffer';
-			xhr.open('GET', tile_name, true);
-			xhr.onload = function(evt) {    
-				if (xhr.response) {
-					load_tile_data(new Uint16Array(xhr.response));
-				}
-			};  
-			xhr.send(null);
-
-
 
 		</script>
 	</body>
