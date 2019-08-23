@@ -35,11 +35,15 @@
 			var here_lat = 47.677756; // degrees
 			var here_lng = -122.338935; // degrees
 			var here_alt_above_ground = 10; // meters
+
+			here_lat = 0;
+			here_lng = 0;
+
 			var meters_per_degree = 111111;
 			var meters_per_degree_x = meters_per_degree;
 			var meters_per_degree_z = Math.cos(here_lat * 3.1416 * 2 / 360) * meters_per_degree;
 
-			var CUTOFF_DISTANCE = 1400; // meters
+			var CUTOFF_DISTANCE = 18000; // meters
 
 			var scene = new THREE.Scene();
 
@@ -56,13 +60,11 @@
 			// Also inspire by https://threejs.org/examples/webgl_shaders_sky.html
 			// Get NREL SPA azimuth and inclination.  https://www.nrel.gov/docs/fy08osti/34302.pdf
 			var sunlight = new THREE.DirectionalLight(0xfae25f, 0.7);
-			sunlight.position.set(50, 20, 0);
+			sunlight.position.set(80000, 10000, 0);
 			scene.add(sunlight);
 
-			var helper = new THREE.DirectionalLightHelper(sunlight, 2);
-			scene.add(helper);
 
-			var mat = new THREE.MeshBasicMaterial({ color: sea_color, side: THREE.DoubleSide });
+			var mat = new THREE.MeshBasicMaterial({ color: sea_color, side: THREE.SingleSide });
 			var seaLevel = new THREE.Mesh(new THREE.PlaneBufferGeometry(2000, 2000, 8, 8), mat);
 			seaLevel.rotateX( - Math.PI / 2);
 			scene.add(seaLevel);
@@ -83,6 +85,7 @@
 						var lines = info_xhr.responseXML.querySelectorAll('MDI[key=lines]')[0].textContent-1;
 						var samples = info_xhr.responseXML.querySelectorAll('MDI[key=samples]')[0].textContent-1;
 
+						// geometry size should be a function of the map size, not a function of the resolution
 						var ground_geometry = new THREE.PlaneGeometry(samples*10, lines*10, samples, lines);
 
 						if (ground_geometry.vertices.length != data.length) {
@@ -94,6 +97,7 @@
 						for (var i = 0, l = data.length; i < l; i++) {
 							  ground_geometry.vertices[i].z = data[i] * height_coefficient / 65535;
 						}
+						console.debug("ground geometry filled!");
 
 						var ground_plane = new THREE.Mesh(ground_geometry, ground_material);
 						ground_plane.rotateX( - Math.PI / 2);
@@ -105,26 +109,28 @@
 				info_xhr.send(false);
 			});
 
+			var subject = new THREE.Object3D();
+			subject.position.set(here_x, here_alt_above_ground, here_z);
+			scene.add(subject);
 
-			var camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 2, CUTOFF_DISTANCE);
-			camera.position.y = here_alt_above_ground;
-			camera.position.x = here_x;
-			camera.position.z = here_z;
+			var camera = new THREE.PerspectiveCamera(7, window.innerWidth / window.innerHeight, 2, CUTOFF_DISTANCE);
+			camera.position.set(here_x-0.7, here_alt_above_ground+0.01, here_z);
+			camera.lookAt(subject.position);
 
 			var controls = new THREE.OrbitControls(camera);
-
-			//controls.update() must be called after any manual changes to the camera's transform
-			camera.position.set(0, 20, 100);
 			//controls.enableDamping = true;
 			controls.enableKeys = true;
 			//controls.maxPolarAngle = 0;
-			controls.rotateSpeed = 1;
+			//controls.maxAzimuthAngle = 0;
+			controls.autoRotate = true;
+			controls.autoRotateSpeed = 0.03;
 			controls.update();
+			controls.target = subject.position;
 
 			function animate() {
 				requestAnimationFrame(animate);
 				// required if controls.enableDamping or controls.autoRotate are set to true
-				//controls.update();
+				controls.update();
 				renderer.render(scene, camera);
 			}
 			animate();
