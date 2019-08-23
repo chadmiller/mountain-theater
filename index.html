@@ -51,7 +51,7 @@
 			var here_z = here_lat * meters_per_degree_z;
 
 			scene.background = new THREE.Color(sky_color);
-			scene.fog = new THREE.Fog(0xaaaabb, 0.1, CUTOFF_DISTANCE);
+			scene.fog = new THREE.FogExp2(0xaaaabb, 0.0008);
 
 			var renderer = new THREE.WebGLRenderer();
 			renderer.setSize(window.innerWidth, window.innerHeight);
