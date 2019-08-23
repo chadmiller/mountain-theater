@@ -126,6 +126,8 @@
 			controls.autoRotateSpeed = 0.03;
 			controls.update();
 			controls.target = subject.position;
+			controls.maxPolarAngle = Math.PI / 2 * 101 / 100;
+			controls.minPolarAngle = Math.PI / 2 * 99 / 100;
 
 			function animate() {
 				requestAnimationFrame(animate);
