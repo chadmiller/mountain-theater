@@ -1,42 +1,29 @@
 $(shell touch --date="5 days ago" freshness-pump)
 
-#range := 47-50,121-126
-#range := 46,121
-range := 47-49,121-126
+range := n46-n49,w126-w121
 
-all: clean terrain${range}.envi terrain${range}.vrt.js #terrain${range}.tiff #terrain${range}.png
+all: clean terrain-${range}.envi terrain-${range}.vrt
 
 clean:
-	rm -fv terrain*.vrt terrain*.png terrain*.envi
-	rm -fv terrain${range}.envi terrain${range}.vrt.js
+	rm -fv terrain-*.vrt terrain-*.envi
+	rm -fv terrain-${range}.envi
 	rm -rfv org?-grd-*
 
-#terrain${range}.tiff:
-#	gdalwarp -te {x-min} {y-min} {x-max} {y-max} <path to .vrt> <path to .tif>
+terrain-${range}.%: MIN_ALTITUDE := 0
+terrain-${range}.%: MAX_ALTITUDE := 2470
+terrain-${range}.%: RESOLUTION := 100
+terrain-${range}.%: terrain-${range}.vrt
+	rm -f $@.aux.xml
+	gdal_translate -epo -strict -scale ${MIN_ALTITUDE} ${MAX_ALTITUDE} 0 65535 -outsize 1% 0 -ot UInt16 -of $* $< $@
+	#gdal_translate -scale ${MIN_ALTITUDE} ${MAX_ALTITUDE} 0 65535 -tr ${RESOLUTION} ${RESOLUTION} -ot UInt16 -of $* $< $@-usingres || true
 
-terrain${range}.%: terrain${range}.vrt
-	gdal_translate -scale 0 2470 0 65535 -outsize 1% 1% -ot UInt16 -of $* $< $@
-	#gdal_translate -scale 0 2470 0 65535                 -ot UInt16 -of $* $< $@
-	#gdal_translate -scale 0 2470 0 65535 -outsize 1501 901 -ot UInt16 -of $* $< $@
-
-terrain${range}.vrt.js: terrain${range}.vrt
-	gdalinfo -nomd $< |grep -Po '(?<=Size\ is\ ).*' |python3 -c 'import json, sys; print("window.map_terrain_grid_size = " + json.dumps(list(int(x)-1 for x in sys.stdin.read().split(", "))) + ";")' |tee $@
-
-terrain46,121.vrt: org1-grd-n46w121
-	gdalbuildvrt $@ $(addsuffix /*.flt,$(filter org1-grd-%,$^)) $(addsuffix /*.flt,$(filter org2-grd-%,$^))
-
-terrain47-49,121-122.vrt: org1-grd-n47w121 org1-grd-n48w121
-	gdalbuildvrt $@ $(addsuffix /*.flt,$(filter org1-grd-%,$^)) $(addsuffix /*.flt,$(filter org2-grd-%,$^))
-
-terrain47-49,121-126.vrt: org1-grd-n47w121 org2-grd-n47w122 org2-grd-n47w123 org2-grd-n47w124 org1-grd-n47w125
-terrain47-49,121-126.vrt: org1-grd-n48w121 org2-grd-n48w122 org2-grd-n48w123 org2-grd-n48w124 org2-grd-n48w125
-terrain47-49,121-126.vrt: org2-grd-n49w121 org2-grd-n49w122 org2-grd-n49w123 org2-grd-n49w124 org1-grd-n49w125 
-	gdalbuildvrt $@ $(addsuffix /*.flt,$(filter org1-grd-%,$^)) $(addsuffix /*.flt,$(filter org2-grd-%,$^))
-	#gdalbuildvrt -allow_projection_difference $@ $(addsuffix /*.flt,$(filter org1-grd-%,$^)) $(addsuffix /*.flt,$(filter org2-grd-%,$^))
+terrain-n46-n49,w126-w121.vrt: org1-grd-n46w121 org2-grd-n46w122 org2-grd-n46w123 org1-grd-n46w124 org1-grd-n46w125
+terrain-n46-n49,w126-w121.vrt: org1-grd-n47w121 org2-grd-n47w122 org2-grd-n47w123 org2-grd-n47w124 org1-grd-n47w125
+terrain-n46-n49,w126-w121.vrt: org1-grd-n48w121 org2-grd-n48w122 org2-grd-n48w123 org2-grd-n48w124 org2-grd-n48w125
+terrain-n46-n49,w126-w121.vrt: org2-grd-n49w121 org2-grd-n49w122 org2-grd-n49w123 org2-grd-n49w124 org1-grd-n49w125 
+terrain-n46-n49,w126-w121.vrt:
 	
-terrain47-49,121-123.vrt: org1-grd-n47w121 org2-grd-n47w122 org1-grd-n48w121 org2-grd-n48w122 
-	gdalbuildvrt $@ $(addsuffix /*.flt,$(filter org1-grd-%,$^)) $(addsuffix /*.flt,$(filter org2-grd-%,$^))
-	#gdalbuildvrt -allow_projection_difference $@ $(addsuffix /*.flt,$(filter org1-grd-%,$^)) $(addsuffix /*.flt,$(filter org2-grd-%,$^))
+	set -x; gdalbuildvrt -overwrite $@ $(addsuffix /*.flt,$(filter org1-grd-%,$^)) $(addsuffix /*.flt,$(filter org2-grd-%,$^))
 	
 org1-grd-%: org1-zip-%
 	rm -rf $@

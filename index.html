@@ -25,12 +25,19 @@
 			var rock_color = 0x6F7953;
 			var sky_color = 0x1c6ba0;
 
+			var south_lat = 46;
+			var north_lat = 49;
+			var west_lng = -121;
+			var east_lng = -126;
+			
+			var tile_name = "geodata/terrain-n"+south_lat+"-n"+north_lat+",w"+Math.abs(east_lng)+"-w"+Math.abs(west_lng)+".envi";
+
 			var here_lat = 47.677756; // degrees
 			var here_lng = -122.338935; // degrees
-			var here_alt_above_ground = 0; // meters
+			var here_alt_above_ground = 10; // meters
 			var meters_per_degree = 111111;
 			var meters_per_degree_x = meters_per_degree;
-			var meters_per_degree_z = Math.cos(here_lat) * meters_per_degree;
+			var meters_per_degree_z = Math.cos(here_lat * 3.1416 * 2 / 360) * meters_per_degree;
 
 			var CUTOFF_DISTANCE = 1400; // meters
 
@@ -46,45 +53,52 @@
 			renderer.setSize(window.innerWidth, window.innerHeight);
 			document.body.appendChild(renderer.domElement);
 
+			// Also inspire by https://threejs.org/examples/webgl_shaders_sky.html
+			// Get NREL SPA azimuth and inclination.  https://www.nrel.gov/docs/fy08osti/34302.pdf
 			var sunlight = new THREE.DirectionalLight(0xfae25f, 0.7);
-			sunlight.position = new THREE.Vector3(0.5, 1, 5).normalize();
+			sunlight.position.set(50, 20, 0);
 			scene.add(sunlight);
 
-			scene.add(new THREE.AmbientLight(sky_color, 0.8));
+			var helper = new THREE.DirectionalLightHelper(sunlight, 2);
+			scene.add(helper);
 
 			var mat = new THREE.MeshBasicMaterial({ color: sea_color, side: THREE.DoubleSide });
 			var seaLevel = new THREE.Mesh(new THREE.PlaneBufferGeometry(2000, 2000, 8, 8), mat);
 			seaLevel.rotateX( - Math.PI / 2);
 			scene.add(seaLevel);
 
-			var tile_name = "geodata/terrain47-49,121-126.envi";
-			var height_coefficient = 50;
+			var height_coefficient = 35;
 
-			var material = new THREE.MeshPhongMaterial({ color: rock_color, shininess: 0.20, specular: 0xffffff, wireframe: false });
+			var ground_material = new THREE.MeshPhongMaterial({ color: rock_color, shininess: 0.20, specular: 0xffffff, wireframe: false });
 
 			var info_xhr = new XMLHttpRequest();
 			var terrainLoader = new THREE.TerrainLoader();
 			terrainLoader.load(tile_name, function(data) {
-				console.log("Got " + data.length + " uint16s of data.");
+				console.debug("Got " + data.length + " uint16s of elevation data.");
 
 				info_xhr.open("GET", tile_name+".aux.xml", true);
 				info_xhr.onload = function (e) {
-					console.log("Got the auxxml");
 					if (info_xhr.readyState === 4) {
+						console.debug("Got the auxxml");
 						var lines = info_xhr.responseXML.querySelectorAll('MDI[key=lines]')[0].textContent-1;
 						var samples = info_xhr.responseXML.querySelectorAll('MDI[key=samples]')[0].textContent-1;
 
-						//var geometry = new THREE.PlaneGeometry(lines*10, samples*10, lines, samples);
-						var geometry = new THREE.PlaneGeometry(samples*10, lines*10, samples, lines);
-						for (var i = 0, l = geometry.vertices.length; i < l; i++) {
-							  //geometry.vertices[i].z = data[i] / 65535 * height_coefficient;
-							  geometry.vertices[i].z = data[i] * height_coefficient / 65535;
+						var ground_geometry = new THREE.PlaneGeometry(samples*10, lines*10, samples, lines);
+
+						if (ground_geometry.vertices.length != data.length) {
+							console.error("aborting: vertex count: " + ground_geometry.vertices.length);
+							console.error("aborting: data count: " + data.length);
+							return;
 						}
 
-						var plane = new THREE.Mesh(geometry, material);
-						plane.rotateX( - Math.PI / 2);
-						plane.translateZ(-0.3); // submerge the sea level
-						scene.add(plane);
+						for (var i = 0, l = data.length; i < l; i++) {
+							  ground_geometry.vertices[i].z = data[i] * height_coefficient / 65535;
+						}
+
+						var ground_plane = new THREE.Mesh(ground_geometry, ground_material);
+						ground_plane.rotateX( - Math.PI / 2);
+						ground_plane.translateZ(-0.3); // submerge the sea level
+						scene.add(ground_plane);
 						
 					}
 				};
